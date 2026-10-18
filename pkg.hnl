@@ -1,3 +1,3 @@
 -- lib-js: modules this package provides (entry defaults to
 -- src/index.hnl; N modules resolve to src/<name>/index.hnl).
-{ modules: ["js"] }
+{ deps: { grade: "branch:main" }, modules: ["js"] }
