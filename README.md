@@ -2,14 +2,11 @@
 
 JavaScript interop surface — `JS` grade, typed call/invoke/await arrows for sdkgen-generated adapters.
 
-Part of the `handl-lang` org split (ADR-0128). History is a `git subtree
-split` of the platform monorepo's `js/` (via `web`).
-
 ## Layout
 
 ```text
 src/        the .hnl sources
-pkg.hnl     dependencies, when any: `{ deps: { <name>: "branch:<ref>" } }`
+pkg.hnl     package manifest — modules, deps, description, license
 ```
 
 ## Gate
