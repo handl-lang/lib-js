@@ -1,3 +1,12 @@
 -- lib-js: modules this package provides (entry defaults to
 -- src/index.hnl; N modules resolve to src/<name>/index.hnl).
+--
+-- `worker` (src/worker/index.hnl — Web Worker bindings over
+-- js.construct/js.invoke/js.on) is deliberately NOT listed: with N
+-- modules the `js` entry would move to src/js/index.hnl and every
+-- `js = { path = "…/lib-js/src" }` path dep plus the single-module
+-- src/index.hnl rule would break. Consumers reach it as
+-- `from "js/worker" import …` under the existing dep mapping (or a
+-- `worker = { path = "…/lib-js/src/worker" }` dep) until the js module
+-- itself migrates to the N-module layout.
 { modules: ["js"], deps: { grade: "branch:main", type: "branch:main" }, description: "JavaScript interop surface — JS grade, typed call/invoke/await arrows.", license: "MIT" }

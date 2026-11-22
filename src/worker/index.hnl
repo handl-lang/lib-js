@@ -1,0 +1,127 @@
+--- worker -- Web Worker bindings over the `js` interop ops.
+---
+--- Parent side: `spawn` constructs a `Worker` through `js.construct`
+--- (sdkgen adapters are receiver-less and constructor-less today),
+--- `post_message`/`terminate` dispatch through `js.invoke`, and
+--- `on_message` registers a Handl arrow for the worker's `"message"`
+--- events — the `js.on` trampoline unwraps `MessageEvent.data`, awaits
+--- the arrow, and posts a non-null result back to the worker.
+---
+--- Worker side (the compiled entry running inside a worker global
+--- scope): `self_post_message` replies to the parent,
+--- `on_message_self` handles incoming messages, and `self_close`
+--- terminates the worker — `self` resolves to the
+--- `DedicatedWorkerGlobalScope`.
+---
+--- Import as `from "js/worker" import { spawn, post_message, … }`
+--- (the `js = { path = "…/lib-js/src" }` dep already covers it) or via
+--- a `worker = { path = "…/lib-js/src/worker" }` dep.
+---
+--- Failure convention: every op returns `null` and records the JS
+--- exception for `js.error()` when `throws` is false — check
+--- `error()` after a `null` result exactly as with `js.call`.
+
+from "js" import {
+  call as js_call,
+  construct as js_construct,
+  error as js_error,
+  invoke as js_invoke,
+  off as js_off,
+  on as js_on,
+}
+
+--- Spawn a `Worker` for `url` (a script URL — `blob:` URLs from
+--- `spawn_code` work too).
+--- @details
+--- `opts` is the WebIDL `WorkerOptions` record (`{ type: "module",
+--- name: "…" }`); pass `null` for the defaults. Returns the Worker
+--- object, or `null` with `js.error()` set on failure (e.g. a
+--- cross-origin URL the CSP refuses).
+export spawn := (url, opts) ~>
+  if opts == null {
+    js_construct("", "Worker", [url], [], "js_object", false)
+  } else {
+    js_construct("", "Worker", [url, opts], [], "js_object", false)
+  }
+
+--- Spawn a `Worker` from inline `code` via a `Blob` object URL.
+--- @details
+--- Builds `new Blob([code])`, resolves `URL.createObjectURL`, and
+--- delegates to `spawn`. The object URL is NOT revoked automatically —
+--- call `revoke_object_url` once the worker has loaded if the code is
+--- large or spawned repeatedly. Returns the Worker object or `null`
+--- (with `js.error()` set) on failure.
+export spawn_code := (code, opts) ~> do {
+  blob := js_construct("", "Blob", [[code]], [], "js_object", false)
+  e1 := js_error()
+  url := if e1 == null {
+    js_call("URL", "createObjectURL", [blob], [], "js_string", false)
+  } else { null }
+  e2 := js_error()
+  if e2 == null { spawn(url, opts) } else { null }
+}
+
+--- Revoke an object URL minted by `spawn_code`/`URL.createObjectURL`.
+export revoke_object_url := (url) ~>
+  js_call("URL", "revokeObjectURL", [url], [], "void", false)
+
+--- Post `msg` to `worker` (`worker.postMessage`).
+--- @details
+--- `transfer` is the optional structured-clone transfer list (a Handl
+--- array of transferable objects — `ArrayBuffer`s, `MessagePort`s);
+--- pass `null` for none. The message must be structured-cloneable:
+--- Handl's `__pair__`/`__either__`/`__bytes__`/tag records survive the
+--- clone, arrows/promises/`__resource__` handles do not.
+export post_message := (worker, msg, transfer) ~>
+  if transfer == null {
+    js_invoke(worker, "postMessage", [msg], [], "void", false)
+  } else {
+    js_invoke(worker, "postMessage", [msg, transfer], [], "void", false)
+  }
+
+--- Terminate `worker` (`worker.terminate`) — discards the worker
+--- immediately, pending messages are dropped.
+export terminate := (worker) ~>
+  js_invoke(worker, "terminate", [], [], "void", false)
+
+--- Register `arrow` for the worker's `"message"` events.
+--- @details
+--- The arrow receives `MessageEvent.data` and its resolved value —
+--- when neither `null` nor `undefined` — is posted back to the worker
+--- automatically (the `js.on` reply convention), so request/reply
+--- handlers need no explicit `post_message` call. Returns the JS
+--- listener for `off`.
+export on_message := (worker, arrow) ~>
+  js_on(worker, "message", arrow)
+
+--- Worker-side counterpart of `on_message`: register `arrow` on the
+--- `self` global's `"message"` events. The arrow's non-null result is
+--- posted back to the parent automatically.
+export on_message_self := (arrow) ~>
+  js_on("self", "message", arrow)
+
+--- Register `arrow` for any DOM event on `target` (an EventTarget
+--- value or a global name string like `"document"`/`"self"`).
+--- Non-`"message"` events deliver the Event object itself to the
+--- arrow. Returns the JS listener for `off`.
+export on := (target, event, arrow) ~>
+  js_on(target, event, arrow)
+
+--- Remove a listener previously returned by `on`/`on_message`/
+--- `on_message_self`.
+export off := (target, event, listener) ~>
+  js_off(target, event, listener)
+
+--- Worker-side `self.postMessage(msg)` — reply to the parent.
+--- `transfer` is the optional transfer list, same as `post_message`.
+export self_post_message := (msg, transfer) ~>
+  if transfer == null {
+    js_call("self", "postMessage", [msg], [], "void", false)
+  } else {
+    js_call("self", "postMessage", [msg, transfer], [], "void", false)
+  }
+
+--- Worker-side `self.close()` — stop the worker's event loop after
+--- pending tasks drain.
+export self_close := () ~>
+  js_call("self", "close", [], [], "void", false)

@@ -72,3 +72,60 @@ export error: () ~[1]~> JsError
 --- @returns {Value - the resolved value, unmarshalled}
 -- TODO(n-dim): effect row
 export await: (Value) ~[1]~> Value
+
+--- Construct a JS object with `new`.
+--- @details
+--- `construct` is the constructor counterpart of `call`: it resolves
+--- `globalThis[obj][method]` — a dotted `method` path is walked from
+--- the resolved base — falling back to `globalThis[method]` for bare
+--- global constructors (`construct("", "Worker", …)` reaches
+--- `globalThis.Worker`), then runs `Reflect.construct` — the emitted
+--- `new Ctor(...args)` — with the same `error` capture convention as
+--- `call`. sdkgen adapters are receiver-less and constructor-less
+--- today, so hand-written bindings like `worker.spawn` go through
+--- this op.
+--- @param {obj} - JS global object or namespace name (`""` for globalThis)
+--- @param {method} - constructor name or dotted path on the object
+--- @param {all_args} - Handl values passed to the constructor
+--- @param {descriptors} - marshalling descriptor for each argument and the return
+--- @param {ret_kind} - return kind descriptor
+--- @param {throws?} - if `true`, thrown exceptions are treated as errors
+--- @returns {Value - the constructed JS object, unmarshalled from `ret_kind`}
+-- TODO(n-dim): effect row
+export construct: (String, String, Array, Array, String, Bool) ~[1]~> Value
+
+--- Register a Handl arrow as a JS event listener.
+--- @details
+--- `on` is the JS→handl trampoline every callback-style JS API needs:
+--- `arrow` — a compiled async `__in => …` Handl arrow — is wrapped in a
+--- JS listener and registered via `target.addEventListener`. `target`
+--- is the EventTarget value itself or a string naming a global
+--- (`"self"`, `"window"`, `"document"`, …). For `"message"` events the
+--- arrow receives `event.data` (the structured-cloned value — the
+--- `__pair__`/`__either__`/`__bytes__`/tag records all survive the
+--- clone); every other event receives the Event object itself. A
+--- `"message"` handler whose arrow resolves to a non-null value gets
+--- it posted back — `event.source` first, then the target's own
+--- `postMessage` when the target is a message peer (a `Worker`, the
+--- worker `self` global, a `MessagePort`) — so worker `onmessage`
+--- replies need no extra plumbing; `null`/`undefined` results never
+--- reply. Listener failures land in `error`, never as unhandled
+--- rejections. Returns the JS listener for `off`.
+--- @param {target} - EventTarget object or global name string
+--- @param {event} - DOM event name (`"message"`, `"click"`, …)
+--- @param {arrow} - Handl arrow receiving the event payload
+--- @returns {Value - the registered JS listener, or null on failure}
+-- TODO(n-dim): effect row
+export on: (Value, String, Value) ~[1]~> Value
+
+--- Remove a listener registered by `on`.
+--- @details
+--- `off` is the unregister counterpart of `on`: it resolves `target`
+--- the same way and calls `removeEventListener` with the listener
+--- value `on` returned.
+--- @param {target} - EventTarget object or global name string
+--- @param {event} - DOM event name the listener was registered under
+--- @param {listener} - the JS listener value returned by `on`
+--- @returns {Value - null on success, or the failure per `error`}
+-- TODO(n-dim): effect row
+export off: (Value, String, Value) ~[1]~> Value
