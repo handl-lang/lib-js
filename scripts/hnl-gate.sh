@@ -8,12 +8,28 @@
 set -euo pipefail
 
 SRC_DIR="${SRC_DIR:-src}"
+GEN_DIR="${GEN_DIR:-handl-packages/generated}"
+SPEC_DIR="${SPEC_DIR:-specs}"
 HNL="${HNL:-../host-cli/target/debug/hnl}"
 if [ ! -x "$HNL" ]; then
   echo "error: no hnl binary at '$HNL'" >&2
   echo "       build it:   (cd ../host-cli && cargo build --bin hnl)" >&2
   exit 1
 fi
+
+# Regenerate the DOM/HTML WebIDL adapters from the committed specs first —
+# always re-emit so the gate covers the current specs, not stale artifacts.
+# specs/{dom,html}.idl are w3c/webref @ 19e2457df856a43ec749c0fd4e88ae1edc4f6cb8
+# (ed/idl/) pinned and committed so regen is deterministic and
+# offline-capable; doc comments fall back to live MDN lookups when there
+# is no .mdn-cache.json next to the output.
+for spec in dom html; do
+  if [ -f "$SPEC_DIR/$spec.idl" ]; then
+    url="https://raw.githubusercontent.com/w3c/webref/19e2457df856a43ec749c0fd4e88ae1edc4f6cb8/ed/idl/$spec.idl"
+    echo "== hnl sdkgen webidl $SPEC_DIR/$spec.idl --output $GEN_DIR/$spec =="
+    "$HNL" sdkgen webidl "$SPEC_DIR/$spec.idl" --output "$GEN_DIR/$spec" --source-url "$url"
+  fi
+done
 
 # The corpus is mixed-dialect: canonical `.hnl` and arrow/contract `.hnl`
 # (`~>`, `cap`/`op`/`handl`/`tag` declarations, a leading `axiom`). The
@@ -51,6 +67,8 @@ is_canonical() {
 sources=()
 tests=()
 skipped=0
+scan_dirs=("$SRC_DIR")
+[ -d "$GEN_DIR" ] && scan_dirs+=("$GEN_DIR")
 while IFS= read -r f; do
   if is_canonical "$f"; then
     case "$f" in
@@ -60,7 +78,7 @@ while IFS= read -r f; do
   else
     skipped=$((skipped + 1))
   fi
-done < <(find "$SRC_DIR" -name '*.hnl' | sort)
+done < <(find "${scan_dirs[@]}" -name '*.hnl' | sort)
 
 if [ "${#sources[@]}" -eq 0 ] && [ "${#tests[@]}" -eq 0 ]; then
   echo "only non-canonical (arrow/contract) sources under $SRC_DIR/ — gate skipped"
