@@ -29,14 +29,17 @@
 --- Node.js shim: browsers/Deno/Bun expose `Worker` on `globalThis`;
 --- Node keeps it in `worker_threads` only, so `js.construct` cannot
 --- reach it. `spawn` runs `ensure_worker_global` first, which installs
---- `globalThis.Worker` once on Node. The js contract has no
---- property-read op and no expression-level dynamic import
---- (`__handl_rt.import` exists in the compile-js prelude but no `.hnl`
---- syntax produces `Op{import}` — only `stmt.import` does), so the
---- probe/install goes through `eval` (`js.call("", "eval", …)` reaches
---- `globalThis.eval` via the bare-global fallback). A real `js.get`/
---- `js.set` pair plus a reachable import op would let this drop the
---- eval strings — tracked as the needed prelude/contract shim.
+--- `globalThis.Worker` once on Node. The js contract now has
+--- `js.get`/`js.set` for property read/write, but the probe/install
+--- still goes through `eval` (`js.call("", "eval", …)` reaches
+--- `globalThis.eval` via the bare-global fallback): the
+--- `typeof process`/`typeof Worker` probes and the
+--- `process.getBuiltinModule` fast path could migrate to
+--- `js.get`/`js.invoke`, yet the awaited dynamic
+--- `import('worker_threads')` fallback has no `.hnl`-reachable import
+--- op (`__handl_rt.import` exists in the compile-js prelude but only
+--- `stmt.import` produces it) — tracked as the needed
+--- prelude/contract shim.
 ---
 --- Transfer lists: `post_message`/`self_post_message` take an optional
 --- `transfer` array. WebIDL `postMessage(message, options)` carries it
@@ -63,9 +66,9 @@ from "js" import {
 }
 
 --- True on Node.js (`process.versions.node` is set). Probed via `eval`
---- because the js contract exposes no global property read — `call`'s
---- bare-global fallback reaches `globalThis.eval`, and indirect eval
---- sees the real global scope on every host.
+--- — `js.get("globalThis", "process")` + a `versions.node` read would
+--- do the same once the shim migrates off eval; indirect eval sees
+--- the real global scope on every host.
 node_runtime := () ~>
   js_call("", "eval",
     ["typeof process !== 'undefined' && !!(process.versions && process.versions.node)"],

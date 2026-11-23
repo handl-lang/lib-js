@@ -94,6 +94,43 @@ export await: (Value) ~[1]~> Value
 -- TODO(n-dim): effect row
 export construct: (String, String, Array, Array, String, Bool) ~[1]~> Value
 
+--- Read a property on a JS object.
+--- @details
+--- `get` is the property-read counterpart of `invoke`: `target` is the
+--- JS object value itself or a string naming a global (`"self"`,
+--- `"window"`, `"process"`, `"globalThis"` — the same resolution `on`
+--- applies); `key` is the property name or a dotted path walked from
+--- the resolved object (`"gpu.requestAdapter"` reaches
+--- `obj.gpu.requestAdapter` — the same walk `construct` applies to
+--- `method`). The resolved value comes back raw — a thenable is boxed
+--- like a `call`/`invoke` result so `js.await` settles it — while a
+--- missing property (`undefined`) maps to `null`, and an unresolvable
+--- receiver records `js.error()` and returns `null`. This is the
+--- eval-free property read every shim needs (`globalThis.Worker`,
+--- `el.value`, `navigator.gpu`).
+--- @param {target} - JS object or global name string
+--- @param {key} - property name or dotted path on the object
+--- @returns {Value - the property value, or null on failure}
+-- TODO(n-dim): effect row
+export get: (Value, String) ~[1]~> Value
+
+--- Write a property on a JS object.
+--- @details
+--- `set` is the property-write counterpart of `get`: it assigns
+--- `target[key] = value` — `target` resolves exactly like `get` (an
+--- object value or a string naming a global, so
+--- `set("globalThis", "Worker", w)` installs the Node worker shim
+--- without `eval`), and `key` is a property name or dotted path —
+--- `set(o, "a.b", v)` walks to `o.a` and assigns `.b`. Returns the
+--- assigned `value` so calls chain; a missing intermediate path or an
+--- unresolvable receiver records `js.error()` and returns `null`.
+--- @param {target} - JS object or global name string
+--- @param {key} - property name or dotted path on the object
+--- @param {value} - the value to assign
+--- @returns {Value - the assigned value, or null on failure}
+-- TODO(n-dim): effect row
+export set: (Value, String, Value) ~[1]~> Value
+
 --- Register a Handl arrow as a JS event listener.
 --- @details
 --- `on` is the JS→handl trampoline every callback-style JS API needs:
