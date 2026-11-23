@@ -1,6 +1,6 @@
 # lib-js
 
-JavaScript interop surface — `JS` grade, typed call/invoke/await arrows for sdkgen-generated adapters.
+JavaScript interop surface — `JS` grade, typed call/invoke/await arrows for codegen-generated adapters.
 
 ## Layout
 
@@ -8,7 +8,7 @@ JavaScript interop surface — `JS` grade, typed call/invoke/await arrows for sd
 src/        the .hnl sources
 specs/      committed WebIDL specs (dom.idl, html.idl — w3c/webref pinned)
 scripts/    hnl-gate.sh — regenerates handl-packages/generated/ via
-            `hnl sdkgen webidl`, then typecheck/lint/test
+            `hnl codegen webidl`, then typecheck/lint/test
 pkg.hnl     package manifest — modules, deps, description, license
 ```
 
@@ -28,7 +28,7 @@ artifacts consumed via dep/path imports, same pattern as `lib-fetch-js`.
   `js = { path = "…/lib-js/src" }` dep (or a `worker` path dep); it is
   intentionally not in `pkg.hnl` `modules` — see the comment there for
   why (the N-module layout would relocate `js` and break path deps).
-  The sdkgen WebIDL pipeline now also emits raw Worker bindings
+  The codegen WebIDL pipeline now also emits raw Worker bindings
   (`handl-packages/generated/html*/Worker*`, `DedicatedWorkerGlobalScope*`,
   `SharedWorker*`, `MessagePort*`, `BroadcastChannel*`) using
   `js.construct`/`js.invoke`/`js.on` with `Result<_, JsError>` returns —

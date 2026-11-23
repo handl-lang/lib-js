@@ -26,8 +26,8 @@ fi
 for spec in dom html; do
   if [ -f "$SPEC_DIR/$spec.idl" ]; then
     url="https://raw.githubusercontent.com/w3c/webref/19e2457df856a43ec749c0fd4e88ae1edc4f6cb8/ed/idl/$spec.idl"
-    echo "== hnl sdkgen webidl $SPEC_DIR/$spec.idl --output $GEN_DIR/$spec =="
-    "$HNL" sdkgen webidl "$SPEC_DIR/$spec.idl" --output "$GEN_DIR/$spec" --source-url "$url"
+    echo "== hnl codegen webidl $SPEC_DIR/$spec.idl --output $GEN_DIR/$spec =="
+    "$HNL" codegen webidl "$SPEC_DIR/$spec.idl" --output "$GEN_DIR/$spec" --source-url "$url"
   fi
 done
 

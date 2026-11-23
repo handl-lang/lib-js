@@ -38,7 +38,7 @@ export call: (String, String, Array, Array, String, Bool) ~[1]~> Value
 --- names a global object or namespace, `invoke` dispatches `method` on
 --- an object value obtained from an earlier call (a `Response`, a
 --- `ReadableStream` reader, ...). Thrown exceptions are recorded for
---- `error`, exactly as `call` does. The sdkgen WebIDL adapters are
+--- `error`, exactly as `call` does. The codegen WebIDL adapters are
 --- receiver-less today (`call("fetch", "text", [], ...)` dispatches with
 --- no `this`), so hand-written adapters that need a method on a value
 --- use `invoke` until the emitter passes the receiver through.
@@ -81,7 +81,7 @@ export await: (Value) ~[1]~> Value
 --- global constructors (`construct("", "Worker", …)` reaches
 --- `globalThis.Worker`), then runs `Reflect.construct` — the emitted
 --- `new Ctor(...args)` — with the same `error` capture convention as
---- `call`. sdkgen adapters are receiver-less and constructor-less
+--- `call`. codegen adapters are receiver-less and constructor-less
 --- today, so hand-written bindings like `worker.spawn` go through
 --- this op.
 --- @param {obj} - JS global object or namespace name (`""` for globalThis)

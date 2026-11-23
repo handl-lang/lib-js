@@ -8,7 +8,7 @@
 --- verbatim on EventEmitters (Node `worker_threads` `Worker`), awaits
 --- the arrow, and posts a non-null result back to the worker.
 ---
---- NOTE: sdkgen now emits the dispatch forms this module hand-rolls —
+--- NOTE: codegen now emits the dispatch forms this module hand-rolls —
 --- `handl-packages/generated/html*/Worker_c.hnl` (and
 --- `DedicatedWorkerGlobalScope_c.hnl`, `SharedWorker_c.hnl`,
 --- `MessagePort_c.hnl`, `BroadcastChannel_c.hnl`, …) carry
