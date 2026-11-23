@@ -118,10 +118,10 @@ ensure_worker_global := () ~> do {
   has := js_get("globalThis", "Worker")
   if has != null {
     true
-  } else if node_runtime(null) != true {
+  } else if node_runtime() != true {
     false
   } else {
-    installed := install_worker_builtin(null)
+    installed := install_worker_builtin()
     if installed == true {
       true
     } else {
@@ -160,7 +160,7 @@ ensure_worker_global := () ~> do {
 --- exists (e.g. `parentPort` is `null` on the Node main thread —
 --- callers surface that through `js.error()` like any failed op).
 export self_target := () ~> do {
-  if node_runtime(null) != true {
+  if node_runtime() != true {
     "self"
   } else {
     p := js_get("globalThis", "process")
@@ -189,7 +189,7 @@ export self_target := () ~> do {
 --- object, or `null` with `js.error()` set on failure (e.g. a
 --- cross-origin URL the CSP refuses).
 export spawn := (url, opts) ~> do {
-  _ := ensure_worker_global(null)
+  _ := ensure_worker_global()
   if opts == null {
     js_construct("", "Worker", [url], [], "js_object", false)
   } else {
@@ -208,8 +208,8 @@ export spawn := (url, opts) ~> do {
 --- minted, so `revoke_object_url` is a no-op there). Returns the
 --- Worker object or `null` (with `js.error()` set) on failure.
 export spawn_code := (code, opts) ~> do {
-  if node_runtime(null) == true {
-    _ := ensure_worker_global(null)
+  if node_runtime() == true {
+    _ := ensure_worker_global()
     --- Node `worker_threads` has no `Blob` object-URL scripts — a
     --- `blob:` specifier is not a supported Worker URL. The Node
     --- equivalent is `new Worker(code, { eval: true })`, which runs
@@ -257,7 +257,7 @@ export revoke_object_url := (url) ~>
 --- the bare array (`postMessage(value, transferList)`), so the call
 --- branches on `node_runtime`.
 export post_message := (worker, msg, transfer) ~> do {
-  node := node_runtime(null)
+  node := node_runtime()
   if transfer == null {
     js_invoke(worker, "postMessage", [msg], [], "void", false)
   } else if node == true {
@@ -293,7 +293,7 @@ export on_message := (worker, arrow) ~>
 --- `js.on` reply convention — `self`/`parentPort` are both `isPeer`
 --- targets).
 export on_message_self := (arrow) ~>
-  js_on(self_target(null), "message", arrow)
+  js_on(self_target(), "message", arrow)
 
 --- Register `arrow` for the worker's `"error"` events (uncaught
 --- exceptions inside the worker). The arrow receives the `ErrorEvent`
@@ -310,13 +310,13 @@ export on_message_error := (worker, arrow) ~>
 --- worker-side peer's `"error"` events (`self` on web, `parentPort`
 --- on Node).
 export on_error_self := (arrow) ~>
-  js_on(self_target(null), "error", arrow)
+  js_on(self_target(), "error", arrow)
 
 --- Worker-side counterpart of `on_message_error`: register `arrow` on
 --- the worker-side peer's `"messageerror"` events (`self` on web,
 --- `parentPort` on Node).
 export on_message_error_self := (arrow) ~>
-  js_on(self_target(null), "messageerror", arrow)
+  js_on(self_target(), "messageerror", arrow)
 
 --- Register `arrow` for any DOM event on `target` (an EventTarget or
 --- EventEmitter value, or a global name string like `"document"`/
@@ -340,8 +340,8 @@ export off := (target, event, listener) ~>
 --- for the object peer and `js.call` for the `"self"` global name —
 --- `invoke` does not resolve string targets.
 export self_post_message := (msg, transfer) ~> do {
-  node := node_runtime(null)
-  t := self_target(null)
+  node := node_runtime()
+  t := self_target()
   args := if transfer == null {
     [msg]
   } else if node == true {
@@ -363,7 +363,7 @@ export self_post_message := (msg, transfer) ~> do {
 --- `self.close`; `process.exit(0)` ends the worker thread (the parent
 --- observes the `"exit"` event).
 export self_close := () ~> do {
-  if node_runtime(null) == true {
+  if node_runtime() == true {
     js_call("process", "exit", [0], [], "void", false)
   } else {
     js_call("self", "close", [], [], "void", false)
