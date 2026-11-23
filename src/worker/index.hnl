@@ -180,6 +180,26 @@ export on_message := (worker, arrow) ~>
 export on_message_self := (arrow) ~>
   js_on("self", "message", arrow)
 
+--- Register `arrow` for the worker's `"error"` events (uncaught
+--- exceptions inside the worker). The arrow receives the `ErrorEvent`.
+export on_error := (worker, arrow) ~>
+  js_on(worker, "error", arrow)
+
+--- Register `arrow` for the worker's `"messageerror"` events (a
+--- message that could not be deserialized).
+export on_message_error := (worker, arrow) ~>
+  js_on(worker, "messageerror", arrow)
+
+--- Worker-side counterpart of `on_error`: register `arrow` on the
+--- `self` global's `"error"` events.
+export on_error_self := (arrow) ~>
+  js_on("self", "error", arrow)
+
+--- Worker-side counterpart of `on_message_error`: register `arrow` on
+--- the `self` global's `"messageerror"` events.
+export on_message_error_self := (arrow) ~>
+  js_on("self", "messageerror", arrow)
+
 --- Register `arrow` for any DOM event on `target` (an EventTarget
 --- value or a global name string like `"document"`/`"self"`).
 --- Non-`"message"` events deliver the Event object itself to the
