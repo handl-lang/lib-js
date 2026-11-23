@@ -26,6 +26,24 @@
 --- terminates the worker — `self` resolves to the
 --- `DedicatedWorkerGlobalScope`.
 ---
+--- Node.js shim: browsers/Deno/Bun expose `Worker` on `globalThis`;
+--- Node keeps it in `worker_threads` only, so `js.construct` cannot
+--- reach it. `spawn` runs `ensure_worker_global` first, which installs
+--- `globalThis.Worker` once on Node. The js contract has no
+--- property-read op and no expression-level dynamic import
+--- (`__handl_rt.import` exists in the compile-js prelude but no `.hnl`
+--- syntax produces `Op{import}` — only `stmt.import` does), so the
+--- probe/install goes through `eval` (`js.call("", "eval", …)` reaches
+--- `globalThis.eval` via the bare-global fallback). A real `js.get`/
+--- `js.set` pair plus a reachable import op would let this drop the
+--- eval strings — tracked as the needed prelude/contract shim.
+---
+--- Transfer lists: `post_message`/`self_post_message` take an optional
+--- `transfer` array. WebIDL `postMessage(message, options)` carries it
+--- as `{ transfer: [...] }` (StructuredSerializeOptions); Node's
+--- `worker_threads` `postMessage(value, transferList)` wants the bare
+--- array, so the call branches on the Node probe.
+---
 --- Import as `from "js/worker" import { spawn, post_message, … }`
 --- (the `js = { path = "…/lib-js/src" }` dep already covers it) or via
 --- a `worker = { path = "…/lib-js/src/worker" }` dep.
@@ -35,12 +53,51 @@
 --- `error()` after a `null` result exactly as with `js.call`.
 
 from "js" import {
+  await as js_await,
   call as js_call,
   construct as js_construct,
   error as js_error,
   invoke as js_invoke,
   off as js_off,
   on as js_on,
+}
+
+--- True on Node.js (`process.versions.node` is set). Probed via `eval`
+--- because the js contract exposes no global property read — `call`'s
+--- bare-global fallback reaches `globalThis.eval`, and indirect eval
+--- sees the real global scope on every host.
+node_runtime := () ~>
+  js_call("", "eval",
+    ["typeof process !== 'undefined' && !!(process.versions && process.versions.node)"],
+    [], "js_boolean", false)
+
+--- Ensure `globalThis.Worker` resolves. Browsers/Deno/Bun already
+--- expose it (returns `true` without touching anything); on Node the
+--- `worker_threads` export is installed once — synchronously via
+--- `process.getBuiltinModule` (Node ≥ 20.16 / ≥ 22.3), falling back to
+--- an awaited dynamic `import('worker_threads')`. Returns whether
+--- `Worker` is a global afterwards; `false` on non-Node hosts without
+--- it or when the install fails.
+ensure_worker_global := () ~> do {
+  has := js_call("", "eval", ["typeof Worker !== 'undefined'"], [], "js_boolean", false)
+  node := node_runtime()
+  if has == true {
+    true
+  } else if node != true {
+    false
+  } else {
+    ok := js_call("", "eval", [
+      "(function(){try{if(typeof process.getBuiltinModule==='function'){var m=process.getBuiltinModule('worker_threads');if(m&&m.Worker){globalThis.Worker=m.Worker;return true}}}catch(e){}return false})()"
+    ], [], "js_boolean", false)
+    if ok == true {
+      true
+    } else {
+      p := js_call("", "eval", [
+        "(async function(){try{var m=await import('worker_threads');if(m&&m.Worker){globalThis.Worker=m.Worker;return true}}catch(e){}return false})()"
+      ], [], "js_object", false)
+      js_await(p)
+    }
+  }
 }
 
 --- Spawn a `Worker` for `url` (a script URL — `blob:` URLs from
@@ -50,12 +107,14 @@ from "js" import {
 --- name: "…" }`); pass `null` for the defaults. Returns the Worker
 --- object, or `null` with `js.error()` set on failure (e.g. a
 --- cross-origin URL the CSP refuses).
-export spawn := (url, opts) ~>
+export spawn := (url, opts) ~> do {
+  _ := ensure_worker_global()
   if opts == null {
     js_construct("", "Worker", [url], [], "js_object", false)
   } else {
     js_construct("", "Worker", [url, opts], [], "js_object", false)
   }
+}
 
 --- Spawn a `Worker` from inline `code` via a `Blob` object URL.
 --- @details
@@ -85,12 +144,20 @@ export revoke_object_url := (url) ~>
 --- pass `null` for none. The message must be structured-cloneable:
 --- Handl's `__pair__`/`__either__`/`__bytes__`/tag records survive the
 --- clone, arrows/promises/`__resource__` handles do not.
-export post_message := (worker, msg, transfer) ~>
+--- On web hosts the list rides the WebIDL options record
+--- (`postMessage(msg, { transfer })`); on Node `worker_threads` wants
+--- the bare array (`postMessage(value, transferList)`), so the call
+--- branches on `node_runtime`.
+export post_message := (worker, msg, transfer) ~> do {
+  node := node_runtime()
   if transfer == null {
     js_invoke(worker, "postMessage", [msg], [], "void", false)
-  } else {
+  } else if node == true {
     js_invoke(worker, "postMessage", [msg, transfer], [], "void", false)
+  } else {
+    js_invoke(worker, "postMessage", [msg, { transfer: transfer }], [], "void", false)
   }
+}
 
 --- Terminate `worker` (`worker.terminate`) — discards the worker
 --- immediately, pending messages are dropped.
@@ -126,13 +193,20 @@ export off := (target, event, listener) ~>
   js_off(target, event, listener)
 
 --- Worker-side `self.postMessage(msg)` — reply to the parent.
---- `transfer` is the optional transfer list, same as `post_message`.
-export self_post_message := (msg, transfer) ~>
+--- `transfer` is the optional transfer list; same web/Node split as
+--- `post_message` (options record vs bare array). Note Node
+--- `worker_threads` has no `self` global — worker-side messaging there
+--- goes through `parentPort`, which this module does not wrap yet.
+export self_post_message := (msg, transfer) ~> do {
+  node := node_runtime()
   if transfer == null {
     js_call("self", "postMessage", [msg], [], "void", false)
-  } else {
+  } else if node == true {
     js_call("self", "postMessage", [msg, transfer], [], "void", false)
+  } else {
+    js_call("self", "postMessage", [msg, { transfer: transfer }], [], "void", false)
   }
+}
 
 --- Worker-side `self.close()` — stop the worker's event loop after
 --- pending tasks drain.
