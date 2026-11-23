@@ -166,3 +166,18 @@ export on: (Value, String, Value) ~[1]~> Value
 --- @returns {Value - null on success, or the failure per `error`}
 -- TODO(n-dim): effect row
 export off: (Value, String, Value) ~[1]~> Value
+
+--- Dynamically `import()` a module specifier.
+--- @details
+--- `import_module` is the eval-free dynamic-import op: it runs the JS
+--- `import(spec)` — `import()` is syntax, not a member call, so `call`/
+--- `invoke` cannot reach it — for specifiers like `"node:worker_threads"`,
+--- `"./x.mjs"`, or a `data:` URL, and returns the module-namespace
+--- promise boxed like a `call`/`invoke` result, so `await` settles it
+--- into the usual `Result` (`ok` carries the namespace record, `err`
+--- the rejection). This is what `js/worker`'s Node shim uses to reach
+--- `worker_threads` without `eval`.
+--- @param {spec} - the module specifier string
+--- @returns {Value - a promise of the module namespace; settle with `await`}
+-- TODO(n-dim): effect row
+export import_module: (String) ~[1]~> Value
