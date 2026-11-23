@@ -25,8 +25,11 @@
 --- Worker side (the compiled entry running inside a worker global
 --- scope): `self_post_message` replies to the parent,
 --- `on_message_self` handles incoming messages, and `self_close`
---- terminates the worker — `self` resolves to the
---- `DedicatedWorkerGlobalScope`.
+--- terminates the worker. The peer is resolved by `self_target`:
+--- the `self` global (`DedicatedWorkerGlobalScope`) on web hosts,
+--- `worker_threads.parentPort` on Node — `globalThis` inside a Node
+--- worker has no `self`/`postMessage`, the `MessagePort` is the real
+--- channel (an EventEmitter for `js.on`, an `isPeer` reply target).
 ---
 --- Node.js shim: browsers/Deno/Bun expose `Worker` on `globalThis`;
 --- Node keeps it in `worker_threads` only, so `js.construct` cannot
@@ -141,6 +144,43 @@ ensure_worker_global := () ~> do {
   }
 }
 
+--- Resolve the worker-side message peer. Web worker globals expose
+--- `self` (`DedicatedWorkerGlobalScope`), returned here as the global
+--- NAME so `js.call`/`js.on` resolve it the usual way. Node
+--- `worker_threads` workers have no `self`/`postMessage` on
+--- `globalThis` — the channel is the `worker_threads` module's
+--- `parentPort` (a `MessagePort`: an EventEmitter for `js.on`'s
+--- emitter path AND an `isPeer` reply target, so a `"message"` arrow's
+--- non-null result posts back to the parent automatically). Node
+--- resolution mirrors `install_worker_builtin`: the synchronous
+--- `process.getBuiltinModule('worker_threads')` fast path first
+--- (Node ≥ 20.16 / ≥ 22.3), then the awaited dynamic
+--- `import('worker_threads')` for older Node. Returns the `parentPort`
+--- object on Node, `"self"` on web hosts, or `null` when no peer
+--- exists (e.g. `parentPort` is `null` on the Node main thread —
+--- callers surface that through `js.error()` like any failed op).
+export self_target := () ~> do {
+  if node_runtime(null) != true {
+    "self"
+  } else {
+    p := js_get("globalThis", "process")
+    m := if p == null {
+      null
+    } else {
+      js_invoke(p, "getBuiltinModule", ["worker_threads"], [], "js_object", false)
+    }
+    port := if m == null { null } else { js_get(m, "parentPort") }
+    if port != null {
+      port
+    } else {
+      r := js_await(js_import_module("worker_threads"))
+      ns := js_get(r, "value")
+      pp := if ns == null { null } else { js_get(ns, "parentPort") }
+      if pp == null { null } else { pp }
+    }
+  }
+}
+
 --- Spawn a `Worker` for `url` (a script URL — `blob:` URLs from
 --- `spawn_code` work too).
 --- @details
@@ -162,16 +202,43 @@ export spawn := (url, opts) ~> do {
 --- Builds `new Blob([code])`, resolves `URL.createObjectURL`, and
 --- delegates to `spawn`. The object URL is NOT revoked automatically —
 --- call `revoke_object_url` once the worker has loaded if the code is
---- large or spawned repeatedly. Returns the Worker object or `null`
---- (with `js.error()` set) on failure.
+--- large or spawned repeatedly. On Node `worker_threads` there is no
+--- `blob:` Worker URL — the code runs through
+--- `new Worker(code, { eval: true })` instead (no object URL is
+--- minted, so `revoke_object_url` is a no-op there). Returns the
+--- Worker object or `null` (with `js.error()` set) on failure.
 export spawn_code := (code, opts) ~> do {
-  blob := js_construct("", "Blob", [[code]], [], "js_object", false)
-  e1 := js_error()
-  url := if e1 == null {
-    js_call("URL", "createObjectURL", [blob], [], "js_string", false)
-  } else { null }
-  e2 := js_error()
-  if e2 == null { spawn(url, opts) } else { null }
+  if node_runtime(null) == true {
+    _ := ensure_worker_global(null)
+    --- Node `worker_threads` has no `Blob` object-URL scripts — a
+    --- `blob:` specifier is not a supported Worker URL. The Node
+    --- equivalent is `new Worker(code, { eval: true })`, which runs
+    --- `code` as the entry source. `eval` is merged into `opts` on
+    --- the JS side (`Object.assign` + `js.set`) because Handl records
+    --- have no spread; unknown WebIDL keys (`type`, `name`) are
+    --- ignored by Node's option parser. `Object.assign` skips a
+    --- `null` source, so `opts == null` needs no special case.
+    o := js_call("Object", "assign", [{}, opts], [], "js_object", false)
+    e1 := js_error()
+    --- `js.set` returns the assigned value (`true`), not the target —
+    --- `o` is the options object either way; `s == null` is the
+    --- failure signal.
+    s := if e1 == null { js_set(o, "eval", true) } else { null }
+    e2 := js_error()
+    if s == null {
+      null
+    } else {
+      js_construct("", "Worker", [code, o], [], "js_object", false)
+    }
+  } else {
+    blob := js_construct("", "Blob", [[code]], [], "js_object", false)
+    e1 := js_error()
+    url := if e1 == null {
+      js_call("URL", "createObjectURL", [blob], [], "js_string", false)
+    } else { null }
+    e2 := js_error()
+    if e2 == null { spawn(url, opts) } else { null }
+  }
 }
 
 --- Revoke an object URL minted by `spawn_code`/`URL.createObjectURL`.
@@ -220,10 +287,13 @@ export on_message := (worker, arrow) ~>
   js_on(worker, "message", arrow)
 
 --- Worker-side counterpart of `on_message`: register `arrow` on the
---- `self` global's `"message"` events. The arrow's non-null result is
---- posted back to the parent automatically.
+--- worker-side message peer's `"message"` events — `self` on web
+--- hosts, `parentPort` on Node (see `self_target`). The arrow's
+--- non-null result is posted back to the parent automatically (the
+--- `js.on` reply convention — `self`/`parentPort` are both `isPeer`
+--- targets).
 export on_message_self := (arrow) ~>
-  js_on("self", "message", arrow)
+  js_on(self_target(null), "message", arrow)
 
 --- Register `arrow` for the worker's `"error"` events (uncaught
 --- exceptions inside the worker). The arrow receives the `ErrorEvent`
@@ -237,14 +307,16 @@ export on_message_error := (worker, arrow) ~>
   js_on(worker, "messageerror", arrow)
 
 --- Worker-side counterpart of `on_error`: register `arrow` on the
---- `self` global's `"error"` events.
+--- worker-side peer's `"error"` events (`self` on web, `parentPort`
+--- on Node).
 export on_error_self := (arrow) ~>
-  js_on("self", "error", arrow)
+  js_on(self_target(null), "error", arrow)
 
 --- Worker-side counterpart of `on_message_error`: register `arrow` on
---- the `self` global's `"messageerror"` events.
+--- the worker-side peer's `"messageerror"` events (`self` on web,
+--- `parentPort` on Node).
 export on_message_error_self := (arrow) ~>
-  js_on("self", "messageerror", arrow)
+  js_on(self_target(null), "messageerror", arrow)
 
 --- Register `arrow` for any DOM event on `target` (an EventTarget or
 --- EventEmitter value, or a global name string like `"document"`/
@@ -259,23 +331,41 @@ export on := (target, event, arrow) ~>
 export off := (target, event, listener) ~>
   js_off(target, event, listener)
 
---- Worker-side `self.postMessage(msg)` — reply to the parent.
+--- Worker-side `self.postMessage(msg)` — reply to the parent. The
+--- peer is `self_target`: the `self` global on web hosts, Node's
+--- `worker_threads.parentPort` on Node (Node `worker_threads` has no
+--- `self` global — the `MessagePort` is the real channel).
 --- `transfer` is the optional transfer list; same web/Node split as
---- `post_message` (options record vs bare array). Note Node
---- `worker_threads` has no `self` global — worker-side messaging there
---- goes through `parentPort`, which this module does not wrap yet.
+--- `post_message` (options record vs bare array). `js.invoke` is used
+--- for the object peer and `js.call` for the `"self"` global name —
+--- `invoke` does not resolve string targets.
 export self_post_message := (msg, transfer) ~> do {
   node := node_runtime(null)
-  if transfer == null {
-    js_call("self", "postMessage", [msg], [], "void", false)
+  t := self_target(null)
+  args := if transfer == null {
+    [msg]
   } else if node == true {
-    js_call("self", "postMessage", [msg, transfer], [], "void", false)
+    [msg, transfer]
   } else {
-    js_call("self", "postMessage", [msg, { transfer: transfer }], [], "void", false)
+    [msg, { transfer: transfer }]
+  }
+  if t == "self" {
+    js_call("self", "postMessage", args, [], "void", false)
+  } else if t == null {
+    null
+  } else {
+    js_invoke(t, "postMessage", args, [], "void", false)
   }
 }
 
 --- Worker-side `self.close()` — stop the worker's event loop after
---- pending tasks drain.
-export self_close := () ~>
-  js_call("self", "close", [], [], "void", false)
+--- pending tasks drain. On Node `worker_threads` there is no
+--- `self.close`; `process.exit(0)` ends the worker thread (the parent
+--- observes the `"exit"` event).
+export self_close := () ~> do {
+  if node_runtime(null) == true {
+    js_call("process", "exit", [0], [], "void", false)
+  } else {
+    js_call("self", "close", [], [], "void", false)
+  }
+}
