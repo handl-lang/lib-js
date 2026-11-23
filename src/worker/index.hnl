@@ -3,7 +3,9 @@
 --- Parent side: `spawn` constructs a `Worker` through `js.construct`,
 --- `post_message`/`terminate` dispatch through `js.invoke`, and
 --- `on_message` registers a Handl arrow for the worker's `"message"`
---- events — the `js.on` trampoline unwraps `MessageEvent.data`, awaits
+--- events — the `js.on` trampoline unwraps `MessageEvent.data` on DOM
+--- EventTargets (browser `Worker`) and takes the emit argument
+--- verbatim on EventEmitters (Node `worker_threads` `Worker`), awaits
 --- the arrow, and posts a non-null result back to the worker.
 ---
 --- NOTE: sdkgen now emits the dispatch forms this module hand-rolls —
@@ -205,7 +207,11 @@ export terminate := (worker) ~>
 
 --- Register `arrow` for the worker's `"message"` events.
 --- @details
---- The arrow receives `MessageEvent.data` and its resolved value —
+--- Works on both worker shapes `spawn` can return: browser `Worker`
+--- (an EventTarget — the arrow receives `MessageEvent.data`) and
+--- Node `worker_threads` `Worker` (an EventEmitter — the arrow
+--- receives the posted value directly; `js.on` feature-detects
+--- `addEventListener` vs `on`/`off`). The arrow's resolved value —
 --- when neither `null` nor `undefined` — is posted back to the worker
 --- automatically (the `js.on` reply convention), so request/reply
 --- handlers need no explicit `post_message` call. Returns the JS
@@ -220,7 +226,8 @@ export on_message_self := (arrow) ~>
   js_on("self", "message", arrow)
 
 --- Register `arrow` for the worker's `"error"` events (uncaught
---- exceptions inside the worker). The arrow receives the `ErrorEvent`.
+--- exceptions inside the worker). The arrow receives the `ErrorEvent`
+--- on DOM targets, the `Error` itself on EventEmitters.
 export on_error := (worker, arrow) ~>
   js_on(worker, "error", arrow)
 
@@ -239,10 +246,11 @@ export on_error_self := (arrow) ~>
 export on_message_error_self := (arrow) ~>
   js_on("self", "messageerror", arrow)
 
---- Register `arrow` for any DOM event on `target` (an EventTarget
---- value or a global name string like `"document"`/`"self"`).
---- Non-`"message"` events deliver the Event object itself to the
---- arrow. Returns the JS listener for `off`.
+--- Register `arrow` for any DOM event on `target` (an EventTarget or
+--- EventEmitter value, or a global name string like `"document"`/
+--- `"self"`). Non-`"message"` events deliver the Event object itself
+--- (DOM) or the emitter's first argument (emitter) to the arrow.
+--- Returns the JS listener for `off`.
 export on := (target, event, arrow) ~>
   js_on(target, event, arrow)
 
