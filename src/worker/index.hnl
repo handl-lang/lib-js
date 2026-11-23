@@ -1,11 +1,24 @@
 --- worker -- Web Worker bindings over the `js` interop ops.
 ---
---- Parent side: `spawn` constructs a `Worker` through `js.construct`
---- (sdkgen adapters are receiver-less and constructor-less today),
+--- Parent side: `spawn` constructs a `Worker` through `js.construct`,
 --- `post_message`/`terminate` dispatch through `js.invoke`, and
 --- `on_message` registers a Handl arrow for the worker's `"message"`
 --- events — the `js.on` trampoline unwraps `MessageEvent.data`, awaits
 --- the arrow, and posts a non-null result back to the worker.
+---
+--- NOTE: sdkgen now emits the dispatch forms this module hand-rolls —
+--- `handl-packages/generated/html*/Worker_c.hnl` (and
+--- `DedicatedWorkerGlobalScope_c.hnl`, `SharedWorker_c.hnl`,
+--- `MessagePort_c.hnl`, `BroadcastChannel_c.hnl`, …) carry
+--- `js.construct`/`js.invoke`/`js.on` adapters with `Result<_, JsError>`
+--- returns and an explicit `self: Handle` receiver. This module stays
+--- the ergonomic `js/worker` surface because the generated bindings do
+--- NOT cover: `spawn_code`/`revoke_object_url` (Blob + object-URL
+--- composition), the `on`/`off` generic event helpers, the
+--- null-return + `js.error()` convention, or the worker-side `self`
+--- global resolved by name (`self_post_message`/`on_message_self`/
+--- `self_close` — the generated `DedicatedWorkerGlobalScope_*` ports
+--- take `self` as an explicit Handle argument instead).
 ---
 --- Worker side (the compiled entry running inside a worker global
 --- scope): `self_post_message` replies to the parent,
