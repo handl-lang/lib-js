@@ -4,8 +4,7 @@
 --- This package exposes the typed JS surface that SDK-generated adapters
 --- import.
 
-from "grade" import { Grade }
-from "type" import { Obj }
+from "type" import { Grade, Obj }
 
 --- Grade for JavaScript calls.
 --- @details
