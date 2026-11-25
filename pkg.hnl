@@ -9,4 +9,5 @@
 -- `from "js/worker" import …` under the existing dep mapping (or a
 -- `worker = { path = "…/lib-js/src/worker" }` dep) until the js module
 -- itself migrates to the N-module layout.
-{ modules: ["js"], name: "js", deps: { type: "branch:main" }, description: "JavaScript interop surface — JS grade, typed call/invoke/await arrows.", license: "MIT" }
+-- test_coverage "none": JS-ffi surface plus generated WebIDL decls — runs only on JS hosts; declarations only.
+{ modules: ["js"], name: "js", deps: { type: "branch:main" }, description: "JavaScript interop surface — JS grade, typed call/invoke/await arrows.", license: "MIT", test_coverage: "none" }
