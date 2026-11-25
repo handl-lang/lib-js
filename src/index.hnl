@@ -29,7 +29,7 @@ export JsError := Obj
 --- @param {throws?} - if `true`, thrown exceptions are treated as errors
 --- @returns {Value - the JS call's return, unmarshalled from `ret_kind`}
 -- TODO(n-dim): effect row
-export call: (String, String, Array, Array, String, Bool) ~[1]~> Value
+export call: (String, String, Array, Array, String, Bool) ~>[1] Value
 
 --- Call a method on a receiver object.
 --- @details
@@ -49,7 +49,7 @@ export call: (String, String, Array, Array, String, Bool) ~[1]~> Value
 --- @param {throws?} - if `true`, thrown exceptions are treated as errors
 --- @returns {Value - the JS method's return, unmarshalled from `ret_kind`}
 -- TODO(n-dim): effect row
-export invoke: (Value, String, Array, Array, String, Bool) ~[1]~> Value
+export invoke: (Value, String, Array, Array, String, Bool) ~>[1] Value
 
 --- Read the most recent JS exception.
 --- @details
@@ -58,7 +58,7 @@ export invoke: (Value, String, Array, Array, String, Bool) ~[1]~> Value
 --- overwrite the stored exception.
 --- @returns {JsError - the current JS exception}
 -- TODO(n-dim): effect row
-export error: () ~[1]~> JsError
+export error: () ~>[1] JsError
 
 --- Await a JS Promise.
 --- @details
@@ -70,7 +70,7 @@ export error: () ~[1]~> JsError
 --- @param {promise} - the Promise value returned by a previous `call`
 --- @returns {Value - the resolved value, unmarshalled}
 -- TODO(n-dim): effect row
-export await: (Value) ~[1]~> Value
+export await: (Value) ~>[1] Value
 
 --- Construct a JS object with `new`.
 --- @details
@@ -91,7 +91,7 @@ export await: (Value) ~[1]~> Value
 --- @param {throws?} - if `true`, thrown exceptions are treated as errors
 --- @returns {Value - the constructed JS object, unmarshalled from `ret_kind`}
 -- TODO(n-dim): effect row
-export construct: (String, String, Array, Array, String, Bool) ~[1]~> Value
+export construct: (String, String, Array, Array, String, Bool) ~>[1] Value
 
 --- Read a property on a JS object.
 --- @details
@@ -111,7 +111,7 @@ export construct: (String, String, Array, Array, String, Bool) ~[1]~> Value
 --- @param {key} - property name or dotted path on the object
 --- @returns {Value - the property value, or null on failure}
 -- TODO(n-dim): effect row
-export get: (Value, String) ~[1]~> Value
+export get: (Value, String) ~>[1] Value
 
 --- Write a property on a JS object.
 --- @details
@@ -128,7 +128,7 @@ export get: (Value, String) ~[1]~> Value
 --- @param {value} - the value to assign
 --- @returns {Value - the assigned value, or null on failure}
 -- TODO(n-dim): effect row
-export set: (Value, String, Value) ~[1]~> Value
+export set: (Value, String, Value) ~>[1] Value
 
 --- Register a Handl arrow as a JS event listener.
 --- @details
@@ -161,7 +161,7 @@ export set: (Value, String, Value) ~[1]~> Value
 --- @param {arrow} - Handl arrow receiving the event payload
 --- @returns {Value - the registered JS listener, or null on failure}
 -- TODO(n-dim): effect row
-export on: (Value, String, Value) ~[1]~> Value
+export on: (Value, String, Value) ~>[1] Value
 
 --- Remove a listener registered by `on`.
 --- @details
@@ -174,7 +174,7 @@ export on: (Value, String, Value) ~[1]~> Value
 --- @param {listener} - the JS listener value returned by `on`
 --- @returns {Value - null on success, or the failure per `error`}
 -- TODO(n-dim): effect row
-export off: (Value, String, Value) ~[1]~> Value
+export off: (Value, String, Value) ~>[1] Value
 
 --- Dynamically `import()` a module specifier.
 --- @details
@@ -189,4 +189,4 @@ export off: (Value, String, Value) ~[1]~> Value
 --- @param {spec} - the module specifier string
 --- @returns {Value - a promise of the module namespace; settle with `await`}
 -- TODO(n-dim): effect row
-export import_module: (String) ~[1]~> Value
+export import_module: (String) ~>[1] Value
