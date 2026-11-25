@@ -9,4 +9,4 @@
 -- `from "js/worker" import …` under the existing dep mapping (or a
 -- `worker = { path = "…/lib-js/src/worker" }` dep) until the js module
 -- itself migrates to the N-module layout.
-{ modules: ["js"], deps: { type: "branch:main" }, description: "JavaScript interop surface — JS grade, typed call/invoke/await arrows.", license: "MIT" }
+{ modules: ["js"], name: "js", deps: { type: "branch:main" }, description: "JavaScript interop surface — JS grade, typed call/invoke/await arrows.", license: "MIT" }
